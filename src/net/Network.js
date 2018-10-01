@@ -6,7 +6,7 @@ import Template from './Template'
  * methods and attributes.
  * @extends NGN.NET
  */
-export default class NET extends NGN.NET {
+export default class JetNetwork extends NGN.NET.Plugin {
   constructor () {
     super(...arguments)
 
@@ -67,7 +67,7 @@ export default class NET extends NGN.NET {
       }),
     })
 
-    NGN.createAlias(this, 'JSONP', this.jsonp)
+    // NGN.createAlias(this, 'JSONP', this.jsonp)
   }
 
   /**

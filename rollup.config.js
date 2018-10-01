@@ -10,10 +10,24 @@ const BROWSERONLY = {
   start_comment: 'node-only',
   end_comment: 'end-node-only'
 }
-const JET = './src/core.js'
+
+const NGN = './node_modules/ngn/src/main.js'
+const JET = './src/main.js'
 
 // JET Development: Standard (Unminified ES6)
 export default [{
+  input: NGN,
+  plugins: [
+    stripCode(BROWSERONLY),
+    replace({
+      delimiters: ['[#', '#]'],
+      REPLACE_VERSION: require('./node_modules/ngn/package.json').version
+    })
+  ],
+  output: [
+    { file: `${outdir}/ngn.js`, format: 'cjs', sourcemap: true }
+  ]
+},{
   input: JET,
   plugins: [
     stripCode(BROWSERONLY),

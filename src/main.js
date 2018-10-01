@@ -1,4 +1,4 @@
 import JET from './core'
-import Network from './net/Network'
+import JetNetwork from './net/Network'
 
-JET.extend('NET', NGN.public(new Network())
+JET.extend('NET', NGN.public(new JetNetwork()))

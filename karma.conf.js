@@ -10,6 +10,7 @@ var getFiles = function () {
   }
 
   return [
+    'test/lib/ngn.js',
     'test/lib/jet.js',
     testFiles,
     'test/test.html'
