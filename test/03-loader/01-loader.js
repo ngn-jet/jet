@@ -9,7 +9,11 @@ test('JET.load Synchronous Only', function (t) {
     './base/remote-data/js/load-e.js'
   ]
 
-  NGN.BUS.threshold('load.complete', 5, function () {
+  NGN.BUS.threshold('load.sync', 5, () => {
+    t.pass('load.sync called for each file.')
+  })
+
+  NGN.BUS.on('load.complete', () => {
     t.pass('Events triggered for each synchronous load.')
     t.end()
   })
@@ -18,9 +22,6 @@ test('JET.load Synchronous Only', function (t) {
     sync: imports
   }, function (files) {
     t.pass('Callback executed.')
-
-    for (var i = 0; i < imports.length; i++) {
-      t.ok(files[i].file.indexOf(imports[i]) > 0 && files[0].content !== null, 'Recognized ' + imports[i])
-    }
+    t.ok(files.length === 5, 'Correct number of files loaded.')
   })
 })

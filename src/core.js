@@ -9,7 +9,10 @@ if (NGN === undefined || typeof NGN !== 'object') {
  * @namespace JET
  */
 Object.defineProperty(NGN.global, 'JET', NGN.public(Object.defineProperties({}, {
-  load: NGN.public(Loader),
+  load: NGN.public(function () {
+    let loader = new Loader(...arguments)
+    loader.run(arguments[arguments.length - 1])
+  }),
 
   extend: NGN.const((namespace, descriptor) => {
     if (JET.hasOwnProperty(namespace)) {

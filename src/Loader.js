@@ -104,7 +104,7 @@
  * @fires {files:Array} load.complete
  * Triggered when **all** files have been loaded and the queue is completely drained.
  */
-class JetLoader {
+export default class JetLoader {
   constructor (cfg = {}, callback) {
     switch (NGN.typeof(cfg)) {
       case 'function':
@@ -120,7 +120,7 @@ class JetLoader {
         NGN.slice(arguments).forEach((arg, i) => {
           if (typeof arg === 'string') {
             args.push(arg)
-          } else if (!NGN.isFn(arg)) {
+          } else if (!NGN.isFn(arg) && i < (arguments.length - 1)) {
             NGN.WARN(`Unexpected argument passed to JET.load at index ${i}: "${arg}".`)
           }
         })
@@ -155,9 +155,11 @@ class JetLoader {
       sync: NGN.private(NGN.coalesce(cfg.sync, [])),
 
       PRIVATE: NGN.privateconst({
+        running: false,
+
         createQueue: (source, eventName, callback) => {
-          let queue = new NGN.Queue()
-          let imported = []
+          const queue = new NGN.Queue()
+          const imported = []
 
           // Queue the remote files for download
           if (source.length > 0) {
@@ -181,7 +183,7 @@ class JetLoader {
             }))
           }
 
-          queue.on('complete', () => {
+          queue.once('complete', () => {
             if (NGN.isFn(callback)) {
               callback(imported)
             }
@@ -191,27 +193,27 @@ class JetLoader {
         }
       })
     })
-
-    console.log(this.async);
-    console.log(this.sync);
   }
 
   run (callback) {
-    // Run the loader
-    this.loadSync(syncFiles => {
-console.log('A');
-      this.load(asyncFiles => {
-console.log('B');
-        let imported = syncFiles.concat(asyncFiles)
-console.log('ASYNC', imported)
-        NGN.BUS.emit('load.complete', imported)
+    if (!this.PRIVATE.running) {
+      this.PRIVATE.running = true
 
-        if (NGN.isFn(callback)) {
-console.log('RETURN');
-          callback(imported)
-        }
+      // Run the loader
+      this.loadSync(syncFiles => {
+        this.loadAsync(asyncFiles => {
+          let imported = syncFiles.concat(asyncFiles)
+
+          NGN.BUS.emit('load.complete', imported)
+
+          if (NGN.isFn(callback)) {
+            callback(imported)
+          }
+
+          this.PRIVATE.running = false
+        })
       })
-    })
+    }
   }
 
   /**
@@ -228,16 +230,13 @@ console.log('RETURN');
    * }]
    * @private
    */
-  load (callback) {
-console.log('PRE LOAD');
+  loadAsync (callback) {
     if (this.async.length > 0) {
-
-      let queue = this.PRIVATE.createQueue(this.async, 'load.async', callback)
-      queue.run()
+      let asyncQueue = this.PRIVATE.createQueue(this.async, 'load.async', callback)
+      asyncQueue.run()
     } else {
-console.log('LOAD?');
       if (NGN.isFn(callback)) {
-        callback([])
+        callback([]) // eslint-disable-line standard/no-callback-literal
       }
     }
   }
@@ -258,19 +257,12 @@ console.log('LOAD?');
    */
   loadSync (callback) {
     if (this.sync.length > 0) {
-      let queue = this.PRIVATE.createQueue(this.sync, 'load.sync', callback)
-      queue.run(true)
+      let syncQueue = this.PRIVATE.createQueue(this.sync, 'load.sync', callback)
+      syncQueue.run(true)
     } else {
       if (NGN.isFn(callback)) {
-        callback([])
+        callback([]) // eslint-disable-line standard/no-callback-literal
       }
     }
   }
-}
-
-export default function Loader () {
-  console.log('PRE');
-  const loader = new JetLoader(...arguments)
-  loader.run(arguments[arguments.length - 1])
-  console.log('POST');
 }

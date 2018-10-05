@@ -229,7 +229,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
     }
 
     url = NGN.NET.normalizeUrl(url)
-console.log(url);
+
     if (this.METADATA.importedFiles.has(url)) {
       let content = document.querySelector(`[jet-import-id="${url}"]`)
 
