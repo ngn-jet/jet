@@ -32,7 +32,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
        * attempt to determine if the request is across origins.
        * @private
        */
-      prelink: NGN.privateconst(function (url, rel, cor) {
+      prelink: NGN.privateconst(function (url, rel, cor = null) {
         if (!document.head) {
           NGN.WARN('Cannot use a preconnect, predns, etc because there is no HEAD in the HTML document.')
           return
@@ -40,13 +40,15 @@ export default class JetNetwork extends NGN.NET.Plugin {
 
         let prelink = document.createElement('link')
         prelink.rel = rel
-        prelink.href = url.trim().toLowerCase().substr(0, 4) !== 'http' ? this.normalizeUrl(window.location.origin + window.location.pathname + url) : url
+        prelink.href = url.trim().toLowerCase().substr(0, 4) !== 'http' ? NGN.NET.normalizeUrl(window.location.origin + window.location.pathname + url) : url
 
-        NGN.coalesce(cor, this.isCrossOrigin(url)) && (prelink.setAttribute('crossorigin', 'true'))
+        if (NGN.coalesce(cor, NGN.NET.Utility.isCrossOrigin(url))) {
+          prelink.setAttribute('crossorigin', 'true')
+        }
 
-        document.head.appendChild(p)
+        document.head.appendChild(prelink)
 
-        NGN.BUS.emit('network.' + rel)
+        NGN.BUS.emit(`network.${rel}`)
       }),
 
       /**
@@ -64,7 +66,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
         } catch (e) {
           return null
         }
-      }),
+      })
     })
 
     // NGN.createAlias(this, 'JSONP', this.jsonp)
@@ -101,6 +103,47 @@ export default class JetNetwork extends NGN.NET.Plugin {
     })
 
     document.body.appendChild(script)
+  }
+
+  /**
+   * @method cacheContent
+   * Cache (in-memory) content by URL.
+   * @param {string} url
+   * The URL/URI of the remote content.
+   * @param {string} content
+   * The content retrieved from the URL.
+   * @param {number} [cacheTTL]
+   * The time-to-live, or the amount of time (milliseconds) before
+   * this content is purged from the cache. If this is unspecified,
+   * the #TTL value will be used.
+   */
+  cacheContent (url, content, cacheTTL = null) {
+    this.METADATA.CACHE.set(NGN.NET.normalizeUrl(url), content)
+
+    cacheTTL = NGN.coalesce(cacheTTL, -1)
+
+    if (cacheTTL >= 0) {
+      setTimeout(() => this.METADATA.CACHE.delete(url), cacheTTL)
+    }
+  }
+
+  /**
+   * @method getCacheItem
+   * Retrieve the cached content for a specific URL.
+   * @param {string} URL
+   * The URL of the remote content that is cached.
+   * @return {string}
+   * Returns the cached content or `null` if there is no cache content for the URL.
+   */
+  getCacheItem (url) {
+    return this.METADATA.CACHE.get(this.normalizeUrl(url))
+  }
+
+  /**
+   * Clears/resets the cache.
+   */
+  clearCache () {
+    this.METADATA.CACHE = new Map()
   }
 
   /**
@@ -154,7 +197,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
    * @fires html.import
    * Returns the HTMLElement/NodeList as an argument to the event handler.
    */
-  'import' (url, callback, bypassCache = false, cacheTTL) {
+  'import' (url, callback, bypassCache = false, cacheTTL = null) {
     // Support multiple simultaneous imports
     if (NGN.typeof(url) === 'array') {
       let out = new Array(url.length)
@@ -165,7 +208,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
           this['import'](uri, function (el) {
             out[num] = el
             next()
-          }, bypassCache)
+          }, bypassCache, cacheTTL)
         })
       })
 
@@ -185,15 +228,20 @@ export default class JetNetwork extends NGN.NET.Plugin {
       url = path.join('/') + '/' + url
     }
 
-    url = this.normalizeUrl(url)
-
+    url = NGN.NET.normalizeUrl(url)
+console.log(url);
     if (this.METADATA.importedFiles.has(url)) {
       let content = document.querySelector(`[jet-import-id="${url}"]`)
 
       return callback(content === null ? null : content.innerText)
     }
 
-    bypassCache = typeof bypassCache === 'boolean' ? bypassCache : false
+    if (typeof bypassCache === 'number' && cacheTTL === null) {
+      cacheTTL = bypassCache
+      bypassCache = false
+    } else {
+      bypassCache = typeof bypassCache === 'boolean' ? bypassCache : false
+    }
 
     if (!bypassCache && this.METADATA.CACHE.has(url)) {
       if (NGN.isFn(callback)) {
@@ -229,9 +277,18 @@ export default class JetNetwork extends NGN.NET.Plugin {
             script = document.createElement('script')
             script.setAttribute('type', 'text/javascript')
             script.text = fileBody
+
+            this.METADATA.importedFiles.add(url)
+
+            // Identify the imported script in the HTML
+            script.setAttribute('jet-import-id', url)
+
+            NGN.coalesce(document.head, document.body).appendChild(script)
+
+            callback(fileBody)
           })
 
-          break
+          return
 
         case 'css':
           script = document.createElement('link')
@@ -240,7 +297,11 @@ export default class JetNetwork extends NGN.NET.Plugin {
           script.setAttribute('type', 'text/css')
           script.setAttribute('href', url)
 
-          script.onload = typeof callback === 'function' ? function () { callback(script) } : function () {}
+          if (NGN.isFn(callback)) {
+            script.onload = function () {
+              callback(script)
+            }
+          }
 
           break
       }
@@ -250,7 +311,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
       // Identify the imported script in the HTML
       script.setAttribute('jet-import-id', url)
 
-      document.getElementsByTagName('head')[0].appendChild(s)
+      NGN.coalesce(document.head, document.body).appendChild(script)
 
       return
     }
@@ -276,28 +337,6 @@ export default class JetNetwork extends NGN.NET.Plugin {
         NGN.BUS.emit('html.import', doc)
       }
     })
-  }
-
-  /**
-   * @method cacheContent
-   * Cache (in-memory) content by URL.
-   * @param {string} url
-   * The URL/URI of the remote content.
-   * @param {string} content
-   * The content retrieved from the URL.
-   * @param {number} [cacheTTL]
-   * The time-to-live, or the amount of time (milliseconds) before
-   * this content is purged from the cache. If this is unspecified,
-   * the #TTL value will be used.
-   */
-  cacheContent (url, content, cacheTTL = null) {
-    this.METADATA.CACHE.set(this.normalizeUrl(url), content)
-
-    cacheTTL = NGN.coalesce(cacheTTL, -1)
-
-    if (cacheTTL >= 0) {
-      setTimeout(() => this.METADATA.CACHE.delete(url), cacheTTL)
-    }
   }
 
   /**
@@ -405,7 +444,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
 
   /**
    * @method template
-   * Include a simple letiable replacement template and apply
+   * Include a simple variable replacement template and apply
    * values to it. This is always cached client side.
    * @param {string} url
    * URL of the template to retrieve.
@@ -417,8 +456,6 @@ export default class JetNetwork extends NGN.NET.Plugin {
    * NodeList generated by the template.
    */
   template (url, data = null, callback) {
-    url = this.normalizeUrl(url)
-
     let tpl = NGN.coalesce(this.METADATA.CACHE.get(`JETNGNTPL::${url}`), new Template(url))
 
     if (NGN.isFn(data)) {
@@ -426,8 +463,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
       data = {}
     }
 
-    tpl.once('generated', content => callback(content))
-    tpl.data = data || {}
+    tpl.generate(data, callback)
   }
 
   /**
@@ -440,7 +476,7 @@ export default class JetNetwork extends NGN.NET.Plugin {
    * Set to `true` to identify the request as a cross origin request.
    * By default, NGN will compare the URL to the current URL in an
    * attempt to determine if the request is across origins.
-   * @fires network-dns-prefetch
+   * @fires network.dns-prefetch
    * Fired when a pre-fetched DNS request is issued to the browser.
    */
   predns (domain, cor) {

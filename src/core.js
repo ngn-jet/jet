@@ -1,3 +1,5 @@
+import Loader from './Loader'
+
 // Crash if NGN is not found.
 if (NGN === undefined || typeof NGN !== 'object') {
   throw new Error('Cannot find NGN. JET depends on the presenceof NGN.')
@@ -7,6 +9,8 @@ if (NGN === undefined || typeof NGN !== 'object') {
  * @namespace JET
  */
 Object.defineProperty(NGN.global, 'JET', NGN.public(Object.defineProperties({}, {
+  load: NGN.public(Loader),
+
   extend: NGN.const((namespace, descriptor) => {
     if (JET.hasOwnProperty(namespace)) {
       throw new Error(`Cannot create JET.${namespace} because it already exists.`)

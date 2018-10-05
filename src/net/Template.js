@@ -5,12 +5,25 @@
  * Fired when the template has been processed (#output is available).
  */
 export default class Template extends NGN.EventEmitter {
+  /**
+   * Create a template.
+   * @param {Object|String} [cfg={}]
+   * Provide confgiration attributes or a URL.
+   */
   constructor (cfg = {}) {
     super()
 
+    if (typeof cfg === 'string') {
+      cfg = { url: JET.NET.Utility.normalizeUrl(cfg) }
+    }
+
     Object.defineProperties(this, {
       METADATA: NGN.private({
-        url: null,
+        /**
+         * @cgproperty {string} url
+         * The URL of the remote template.
+         */
+        url: NGN.coalesce(cfg.url),
         source: null,
         output: null,
         cacheTimer: null,
@@ -33,8 +46,27 @@ export default class Template extends NGN.EventEmitter {
     })
 
     this.on('cache.change.ttl', delta => this.startCacheTTL())
+  }
 
-    this.startCacheTTL()
+  get URL () {
+    return this.METADATA.url
+  }
+
+  set URL (value) {
+    let URL = JET.NET.Utility.normalizeUrl(value)
+
+    if (URL !== this.METADATA.url) {
+      this.METADATA.url = URL
+      this.clearCache()
+    }
+  }
+
+  get url () {
+    return this.METADATA.url
+  }
+
+  set url (value) {
+    this.URL = value
   }
 
   get TTL () {
@@ -61,6 +93,15 @@ export default class Template extends NGN.EventEmitter {
     this.startCacheTTL()
   }
 
+  set source (value) {
+    this.METADATA.source = value
+    this.startCacheTTL()
+  }
+
+  get output () {
+    return this.METADATA.output
+  }
+
   set data (data) {
     if (this.source === null) {
       NGN.WARN(`Cannot apply data to empty template found at ${this.METADATA.url}.`)
@@ -68,19 +109,23 @@ export default class Template extends NGN.EventEmitter {
     }
 
     // Reset template
-    this.output = this.source
+    this.METADATA.output = this.METADATA.source
 
     // Apply data attributes to template
     Object.keys(data).forEach(attribute => {
-      let token = new RegExp(`\{{2}${key}\}{2}`, 'gm')
+      let token = new RegExp(`\{{2}${attribute}\}{2}`, 'gm') // eslint-disable-line no-useless-escape
 
-      this.output = this.output.replace(token, data[attribute])
+      this.METADATA.output = this.METADATA.output.replace(token, data[attribute])
     })
 
     // Clear unused template code
-    this.output = this.output.replace(/(\{\{.*\}\})/gm, '')
+    this.METADATA.output = this.METADATA.output.replace(/(\{\{.*\}\})/gm, '')
 
-    this.emit('generated', this.output)
+    this.emit('generated', this.METADATA.output)
+  }
+
+  get cached () {
+    return this.METADATA.source !== null
   }
 
   startCacheTTL () {
@@ -90,10 +135,74 @@ export default class Template extends NGN.EventEmitter {
   }
 
   clearCache () {
-    this.source = ''
-    this.output = ''
+    this.METADATA.source = null
+    this.METADATA.output = null
 
     clearTimeout(this.METADATA.cacheTimer)
     this.emit('cache.cleared')
+  }
+
+  /**
+   * Retrieve the template from the remote source.
+   * @param {Function} callback
+   * The handler to respond with when the template content is available.
+   * @param {string} callback.error
+   * Returns an error if it occurs.
+   * @param {string} callback.content
+   * The content of the remote file.
+   * @param {boolean} [force=false]
+   * Force the request (ignore the cache).
+   */
+  pull (callback, force = false) {
+    if (this.cached && !force) {
+      return callback(null, this.METADATA.source)
+    }
+
+    if (this.METADATA.url === null) {
+      let PullError = new Error(`No template URL specified.`)
+
+      return callback(PullError)
+    }
+
+    JET.NET.GET(this.METADATA.url, res => {
+      if (res.status !== 200) {
+        let PullHttpError = new Error(`Could not retrieve remote template from "${this.METADATA.url}" (HTTP ${res.status}).`)
+
+        return callback(PullHttpError)
+      }
+
+      this.METADATA.source = res.responseText
+      this.startCacheTTL()
+
+      callback(null, this.METADATA.source)
+    })
+  }
+
+  /**
+   * Generates the output of a remote template. This is
+   * the same as pulling a remote template (#pull), then
+   * supplying #data.
+   * @param  {Object} data
+   * The data object to apply to the template.
+   * @param {Function} callback
+   * The handler to respond with when the template content is available.
+   * @param {string} callback.error
+   * Returns an error if it occurs.
+   * @param {string|array} callback.content
+   * The content of the remote file.
+   * @param {boolean} [force=false]
+   * Force the request (ignore the cache).
+   */
+  generate (data, callback, force = false) {
+    this.pull((err, content) => {
+      if (err) {
+        return callback(err)
+      }
+
+      this.source = content
+      this.data = data
+
+      callback(null, this.output)
+    }, force)
   }
 }

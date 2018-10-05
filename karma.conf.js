@@ -1,5 +1,5 @@
 var getFiles = function () {
-  var testFiles = 'test/*-**/*-*.js'
+  var testFiles = '*-**/*-*.js'
 
   if (process.argv.indexOf('--test') >= 0) {
     switch (process.argv[process.argv.indexOf('--test') + 1]) {
@@ -10,16 +10,22 @@ var getFiles = function () {
   }
 
   return [
-    'test/lib/ngn.js',
-    'test/lib/jet.js',
+    'lib/ngn.js',
+    'lib/jet.js',
     testFiles,
-    'test/test.html'
+    { pattern: 'remote-data/template.html', included: true },
+    { pattern: 'remote-data/git.svg', included: true },
+    { pattern: 'remote-data/js/load-a.js', included: true },
+    { pattern: 'remote-data/js/load-b.js', included: true },
+    { pattern: 'remote-data/js/load-c.js', included: true },
+    { pattern: 'remote-data/js/load-d.js', included: true },
+    { pattern: 'remote-data/js/load-e.js', included: true }
   ]
 }
 
 module.exports = config => {
   config.set({
-    basePath: '',
+    basePath: './test/',
 
     plugins: [
       require('karma-browserify'),
@@ -44,8 +50,10 @@ module.exports = config => {
     frameworks: ['browserify', 'source-map-support', 'tap'],
 
     preprocessors: {
-      'test/**/*-*.js': ['browserify'],
-      'test/test.html': 'html2js'
+      '**/*-*.js': ['browserify'],
+      '**/*.js.map': ['browserify'],
+      // 'test.html': ['html2js']
+      // 'template.html': ['html2js']
     },
 
     reporters: ['tap-pretty'],
@@ -58,8 +66,8 @@ module.exports = config => {
 
     // level of logging
     // possible values: config.LOG_DISABLE || config.LOG_ERROR || config.LOG_WARN || config.LOG_INFO || config.LOG_DEBUG
-    logLevel: config.LOG_ERROR,
-    // logLevel: config.LOG_DEBUG,
+    // logLevel: config.LOG_ERROR,
+    logLevel: config.LOG_DEBUG,
 
     // enable / disable watching file and executing tests whenever any file changes
     autoWatch: false,
@@ -82,11 +90,11 @@ module.exports = config => {
       separator: '----------------------------------------'
     },
 
-    browserConsoleLogOptions: {
-      level: 'error',
-      format: '%b %T: %m',
-      terminal: false
-    },
+    // browserConsoleLogOptions: {
+    //   level: 'error',
+    //   format: '%b %T: %m',
+    //   terminal: false
+    // },
 
     browserify: {
       debug: true
